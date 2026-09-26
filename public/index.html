@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0A0A0A" />
+  <title>K Store — Knowledge Check</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:      #F0EDE8;
+      --surface: #E8E4DE;
+      --ink:     #0A0A0A;
+      --ink-2:   #5C5C5C;
+      --ink-3:   #9A9590;
+      --border:  #C8C2BA;
+      --pass:    #1A5C35;
+      --pass-bg: #DFF0E8;
+      --fail:    #7A1A1A;
+      --fail-bg: #F5E0E0;
+      --warn:    #6B4400;
+      --warn-bg: #FBF0D4;
+      --mono:    "Space Mono", monospace;
+      --sans:    "Space Grotesk", sans-serif;
+      box-sizing: border-box;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    *, *::before, *::after { box-sizing: inherit; margin: 0; padding: 0; }
+    html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ── */
+    header {
+      width: 100%;
+      background: var(--ink);
+      padding: 0 32px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      position: sticky;
+      top: env(safe-area-inset-top, 0px);
+      z-index: 20;
+    }
+    .h-wordmark {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      color: var(--bg);
+    }
+    .h-slash { color: #444; font-family: var(--mono); font-size: 11px; }
+    .h-context {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .05em;
+      color: #777;
+    }
+    .h-status {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: .1em;
+      padding: 2px 6px;
+      display: none;
+    }
+    .h-status.ai     { background: #0D2E0D; color: #5DD98A; }
+    .h-status.static { background: #2E1E00; color: #E8B84B; }
+    .h-progress { margin-left: auto; display: none; align-items: center; gap: 10px; }
+    .h-progress.show { display: flex; }
+    .h-prog-num { font-family: var(--mono); font-size: 10px; color: #555; }
+    .h-prog-track { width: 72px; height: 1px; background: #2A2A2A; }
+    .h-prog-fill { height: 100%; background: #666; transition: width .5s ease; }
+
+    /* ── Main ── */
+    main { width: 100%; max-width: 660px; padding: 56px 24px 96px; flex: 1; }
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ── Welcome ── */
+    .w-course-line {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-3);
+      letter-spacing: .06em;
+      margin-bottom: 20px;
+    }
+    .w-heading {
+      font-size: clamp(40px, 9vw, 60px);
+      font-weight: 700;
+      line-height: 1.0;
+      letter-spacing: -.025em;
+      margin-bottom: 24px;
+    }
+    .w-sub {
+      font-size: 15px;
+      color: var(--ink-2);
+      line-height: 1.65;
+      max-width: 460px;
+      margin-bottom: 44px;
+    }
+
+    /* Name field */
+    .field-label {
+      display: block;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .08em;
+      color: var(--ink-3);
+      margin-bottom: 8px;
+    }
+    .field-input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--ink);
+      padding: 10px 0;
+      font-family: var(--sans);
+      font-size: 16px;
+      color: var(--ink);
+      outline: none;
+      margin-bottom: 40px;
+      transition: border-color .15s;
+    }
+    .field-input::placeholder { color: var(--ink-3); }
+    .field-input:focus { border-bottom-color: var(--ink); border-bottom-width: 2px; }
+
+    /* Rules strip */
+    .rules-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 40px;
+    }
+    .rule {
+      padding: 18px 0;
+      border-right: 1px solid var(--border);
+    }
+    .rule:last-child { border-right: none; padding-left: 20px; }
+    .rule:nth-child(2) { padding-left: 20px; }
+    .rule-n {
+      font-family: var(--mono);
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .rule-d { font-size: 11px; color: var(--ink-2); line-height: 1.4; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .01em;
+      cursor: pointer;
+      border: none;
+      transition: opacity .15s, transform .1s;
+      padding: 12px 24px;
+    }
+    .btn:hover { opacity: .82; }
+    .btn:active { transform: scale(.98); }
+    .btn:disabled { opacity: .28; cursor: not-allowed; }
+    .btn-ink  { background: var(--ink); color: var(--bg); }
+    .btn-warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #B8920A; }
+
+    /* ── Notice screen ── */
+    .notice-status {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .1em;
+      color: var(--warn);
+      margin-bottom: 18px;
+    }
+    .notice-heading {
+      font-size: clamp(28px, 6vw, 40px);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+    .notice-body { font-size: 14px; color: var(--ink-2); line-height: 1.65; margin-bottom: 12px; }
+    .notice-code {
+      font-family: var(--mono);
+      font-size: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      color: var(--ink-3);
+      word-break: break-all;
+      line-height: 1.6;
+      margin-bottom: 28px;
+    }
+    .notice-bar {
+      border-left: 2px solid var(--ink);
+      padding: 14px 18px;
+      margin-bottom: 32px;
+    }
+    .notice-bar p { font-size: 13px; color: var(--ink-2); line-height: 1.7; }
+    .notice-bar strong { color: var(--ink); }
+
+    /* ── Question meta ── */
+    .q-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 36px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .q-n { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+    .q-tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .06em;
+      background: var(--ink);
+      color: var(--bg);
+      padding: 3px 8px;
+    }
+    .q-pts { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-left: auto; }
+
+    /* ── Question text (no rotated label — just the text, left-aligned, large) ── */
+    .q-text {
+      font-size: 18px;
+      font-weight: 500;
+      line-height: 1.55;
+      color: var(--ink);
+      margin-bottom: 28px;
+      max-width: 560px;
+      border-left: 2px solid var(--ink);
+      padding-left: 18px;
+    }
+    /* Coach thinking state */
+    .q-text.thinking { color: var(--ink-3); border-left-color: var(--border); }
+    .typing-dots span {
+      display: inline-block; width: 5px; height: 5px;
+      background: var(--ink-3); border-radius: 50%; margin: 0 2px;
+      animation: bounce 1.2s infinite ease-in-out;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: .2s; }
+    .typing-dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-4px)} }
+
+    /* ── Answer input ── */
+    textarea {
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-top: none;
+      border-left: none;
+      border-right: none;
+      border-bottom: 1px solid var(--ink);
+      padding: 12px 0;
+      font-family: var(--sans);
+      font-size: 15px;
+      color: var(--ink);
+      resize: none;
+      min-height: 100px;
+      outline: none;
+      line-height: 1.65;
+      margin-bottom: 16px;
+      transition: border-bottom-color .15s;
+    }
+    textarea::placeholder { color: var(--ink-3); }
+    textarea:focus { border-bottom-width: 2px; }
+    textarea:disabled { opacity: .35; }
+    .a-actions { display: flex; justify-content: flex-end; }
+
+    /* ── MCQ ── */
+    .mcq-text {
+      font-size: 17px;
+      font-weight: 500;
+      line-height: 1.55;
+      margin-bottom: 28px;
+      max-width: 540px;
+    }
+    .mcq-opts { display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px; }
+    .mcq-opt {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 14px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1.5;
+      transition: border-color .15s;
+    }
+    .mcq-opt:hover:not(.disabled) { border-color: var(--ink); }
+    .mcq-opt.selected { border-color: var(--ink); background: var(--bg); outline: 2px solid var(--ink); outline-offset: -2px; }
+    .mcq-opt.correct  { border-color: var(--pass); background: var(--pass-bg); cursor: default; }
+    .mcq-opt.wrong    { border-color: var(--fail); background: var(--fail-bg); cursor: default; }
+    .mcq-opt.disabled { cursor: default; }
+    .mcq-opt input[type=radio] { margin-top: 2px; flex-shrink: 0; accent-color: var(--ink); }
+    .mcq-fb {
+      font-size: 13px; line-height: 1.6;
+      padding: 12px 16px;
+      border-left: 2px solid;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .mcq-fb.correct { border-color: var(--pass); background: var(--pass-bg); color: var(--pass); }
+    .mcq-fb.wrong   { border-color: var(--fail); background: var(--fail-bg); color: var(--fail); }
+    .mcq-actions { display: flex; justify-content: flex-end; }
+
+    /* ── Results ── */
+    .res-top {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 24px;
+      align-items: end;
+      padding-bottom: 36px;
+      margin-bottom: 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .res-score-col { }
+    .res-score-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-3);
+      letter-spacing: .06em;
+      margin-bottom: 4px;
+    }
+    .res-score-num {
+      font-size: clamp(56px, 12vw, 80px);
+      font-weight: 700;
+      letter-spacing: -.03em;
+      line-height: 1;
+    }
+    .res-score-denom {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--ink-3);
+      margin-top: 4px;
+    }
+    .res-verdict-col { padding-bottom: 6px; }
+    .res-verdict-word {
+      font-size: clamp(36px, 8vw, 52px);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      line-height: 1;
+    }
+    .res-verdict-word.pass { color: var(--pass); }
+    .res-verdict-word.fail { color: var(--fail); }
+    .res-pass-line {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-3);
+      margin-top: 6px;
+    }
+    .res-mode-note {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--warn);
+      margin-top: 4px;
+      display: none;
+    }
+
+    /* Results table */
+    .res-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0;
+    }
+    .res-table th {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .06em;
+      color: var(--ink-3);
+      text-align: left;
+      padding: 16px 0 10px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 400;
+    }
+    .res-table th:last-child { text-align: right; }
+    .res-table td {
+      padding: 14px 0;
+      border-bottom: 1px solid var(--surface);
+      vertical-align: top;
+      font-size: 13px;
+      color: var(--ink-2);
+    }
+    .res-table td:first-child {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-3);
+      width: 32px;
+      padding-right: 12px;
+      padding-top: 16px;
+    }
+    .res-table td:nth-child(2) { color: var(--ink); font-weight: 500; font-size: 13px; }
+    .res-table td:last-child { text-align: right; font-family: var(--mono); font-size: 12px; padding-top: 14px; }
+    .td-pass { color: var(--pass); }
+    .td-partial { color: #7A5200; }
+    .td-fail { color: var(--fail); }
+
+    /* Dim sub-rows */
+    .dim-sub { display: block; font-size: 11px; font-weight: 400; color: var(--ink-2); margin-top: 4px; line-height: 1.5; }
+    .dim-mark { display: inline-block; width: 14px; }
+
+    /* Ideal answer */
+    .ideal-row td {
+      padding: 10px 0 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ideal-inner {
+      background: var(--surface);
+      padding: 12px 14px;
+      font-size: 12px;
+      color: var(--ink-2);
+      line-height: 1.65;
+      border-left: 2px solid var(--border);
+    }
+    .ideal-inner strong {
+      display: block;
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: .1em;
+      color: var(--ink-3);
+      margin-bottom: 5px;
+    }
+
+    /* Footer */
+    .res-foot { margin-top: 40px; }
+    .res-foot p { font-size: 12px; color: var(--ink-3); line-height: 1.7; }
+    .submit-status {
+      display: block;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-3);
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 480px) {
+      main { padding: 36px 16px 80px; }
+      header { padding: 0 16px; }
+      .h-context { display: none; }
+      .res-top { grid-template-columns: 1fr; gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="h-wordmark">K STORE</span>
+  <span class="h-slash">/</span>
+  <span class="h-context">Campaign Update</span>
+  <span class="h-status ai"     id="hAI">AI</span>
+  <span class="h-status static" id="hStatic">Static</span>
+  <div class="h-progress" id="hProgress">
+    <span class="h-prog-num" id="hProgNum">0 / 5</span>
+    <div class="h-prog-track"><div class="h-prog-fill" id="hProgFill" style="width:0%"></div></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- WELCOME -->
+  <div class="screen active" id="sWelcome">
+    <p class="w-course-line">Course 2</p>
+    <h1 class="w-heading">Knowledge<br>Check</h1>
+    <p class="w-sub">You've completed the campaign update. Confirm what landed before going back to the queue.</p>
+    <label class="field-label" for="nameInput">Full name</label>
+    <input class="field-input" type="text" id="nameInput" placeholder="Your name" autocomplete="name" />
+    <div class="rules-strip">
+      <div class="rule">
+        <div class="rule-n" id="questionCount">5</div>
+        <div class="rule-d">Questions</div>
+      </div>
+      <div class="rule">
+        <div class="rule-n">70</div>
+        <div class="rule-d">Points to pass</div>
+      </div>
+      <div class="rule">
+        <div class="rule-n">1×</div>
+        <div class="rule-d">Attempt only</div>
+      </div>
+    </div>
+    <button class="btn btn-ink" onclick="start()">Begin</button>
+  </div>
+
+  <!-- FALLBACK NOTICE -->
+  <div class="screen" id="sNotice">
+    <p class="notice-status">Service notice</p>
+    <h2 class="notice-heading">AI Tutor<br>Unavailable</h2>
+    <p class="notice-body">The AI assessment service is unreachable right now. Gemini, OpenRouter, and DeepSeek were all checked.</p>
+    <div class="notice-code" id="noticeDetail">Checking...</div>
+    <div class="notice-bar">
+      <p>Your assessment continues in <strong>static mode</strong> — same <span id="staticQuestionCount">5</span> topics, same rubric, same pass mark of <strong>70 / 100</strong>. Results are recorded when score submission is configured.</p>
+    </div>
+    <button class="btn btn-warn" id="btnStatic" onclick="goStatic()">Continue in static mode</button>
+  </div>
+
+  <!-- AI QUESTION -->
+  <div class="screen" id="sQuestion">
+    <div class="q-row">
+      <span class="q-n"   id="qN">Q1 / 5</span>
+      <span class="q-tag" id="qTag">Topic</span>
+      <span class="q-pts" id="qPts">20 pts</span>
+    </div>
+    <div class="q-text" id="qText">Loading...</div>
+    <textarea id="answerInput" placeholder="Answer in your own words."></textarea>
+    <div class="a-actions">
+      <button class="btn btn-ink" id="btnSubmit" onclick="answerAction()">Submit</button>
+    </div>
+  </div>
+
+  <!-- STATIC MCQ -->
+  <div class="screen" id="sMCQ">
+    <div class="q-row">
+      <span class="q-n"   id="mcqN">Q1 / 5</span>
+      <span class="q-tag" id="mcqTag">Topic</span>
+      <span class="q-pts" id="mcqPts">20 pts</span>
+    </div>
+    <div class="mcq-text" id="mcqText">Loading...</div>
+    <div class="mcq-opts"    id="mcqOpts"></div>
+    <div class="mcq-fb"      id="mcqFb"></div>
+    <div class="mcq-actions">
+      <button class="btn btn-ink" id="btnMcq" onclick="submitMCQ()" disabled>Submit</button>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="screen" id="sResults">
+    <div class="res-top">
+      <div class="res-score-col">
+        <div class="res-score-label">Score</div>
+        <div class="res-score-num" id="resNum">0</div>
+        <div class="res-score-denom" id="resDenom">/ 100</div>
+      </div>
+      <div class="res-verdict-col">
+        <div class="res-verdict-word" id="resVerdict">Pass</div>
+        <div class="res-pass-line">Pass mark — 70 / 100</div>
+        <div class="res-mode-note" id="resModeNote">Completed in static mode</div>
+      </div>
+    </div>
+    <table class="res-table" id="resTable">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Topic</th>
+          <th>Score</th>
+        </tr>
+      </thead>
+      <tbody id="resTbody"></tbody>
+    </table>
+    <div class="res-foot">
+      <span class="submit-status" id="submitStatus">Recording results...</span>
+      <p>This assessment cannot be retaken.</p>
+      <p>You may now proceed to the next section.</p>
+    </div>
+  </div>
+
+</main>
+
+<script>
+/* ── State ── */
+const S = {
+  name:"", mode:"ai", q:0,
+  questions:[], fallback:[], scores:[],
+  mcqSel:null, mcqDone:false, awaitingFeedback:false,
+};
+let resumeFromStatic = null;
+
+/* ── Boot ── */
+let aiOK = true, aiErr = "";
+const bootPromise = (async () => {
+  try {
+    const [h,q,f] = await Promise.all([
+      fetch("/api/health"), fetch("/api/questions"), fetch("/api/fallback-questions"),
+    ]);
+    if (!h.ok || !q.ok || !f.ok) throw new Error("Could not load assessment data from the server.");
+    const hj = await h.json();
+    S.questions = await q.json();
+    S.fallback  = await f.json();
+    const questionCount = S.questions.length || S.fallback.length;
+    document.getElementById("questionCount").textContent = questionCount;
+    document.getElementById("staticQuestionCount").textContent = questionCount;
+    aiOK = hj.aiAvailable;
+    if (!aiOK) aiErr = (hj.errors||[]).join(" · ");
+  } catch(e){ aiOK=false; aiErr=e.message; }
+})();
+
+/* ── Welcome ── */
+async function start(){
+  const n = document.getElementById("nameInput").value.trim();
+  if(!n){ alert("Please enter your name."); return; }
+  await bootPromise;
+  if(!S.questions.length || !S.fallback.length){
+    document.getElementById("noticeDetail").textContent = aiErr||"Assessment questions could not be loaded.";
+    document.getElementById("btnStatic").disabled = true;
+    showScreen("sNotice");
+    return;
+  }
+  S.name = n;
+  show("hProgress");
+  if(aiOK){
+    S.mode="ai";
+    show("hAI");
+    showScreen("sQuestion");
+    loadQ(0);
+  } else {
+    S.mode="static";
+    show("hStatic");
+    document.getElementById("noticeDetail").textContent = aiErr||"All providers unavailable.";
+    showScreen("sNotice");
+  }
+}
+
+function goStatic(){
+  showScreen("sMCQ");
+  if(resumeFromStatic !== null){ loadMCQ(resumeFromStatic); resumeFromStatic=null; }
+  else loadMCQ(0);
+}
+
+/* ── AI mode ── */
+function loadQ(i){
+  const q = S.questions[i];
+  S.awaitingFeedback=false;
+  prog(i);
+  document.getElementById("qN").textContent   = `Q${i+1} / ${S.questions.length}`;
+  document.getElementById("qTag").textContent = q.topic;
+  document.getElementById("qPts").textContent = `${q.maxScore} pts`;
+  setQ(q.question, false);
+  resetTA();
+}
+
+function answerAction(){
+  if(S.awaitingFeedback){
+    nextQ();
+    return;
+  }
+  submitAns();
+}
+
+async function submitAns(){
+  const ans = document.getElementById("answerInput").value.trim();
+  if(!ans || S.awaitingFeedback) return;
+  lockTA(); setQ("",true);
+  const q = S.questions[S.q];
+  try {
+    const r = await post("/api/evaluate",{questionId:q.id,answer:ans,isFollowUp:false});
+    if(r.allAiFailed) return midFail(r.detail);
+    pushScore(q, r.results, r.results.reduce((s,x)=>s+x.points,0));
+    setQ(r.tutorResponse,false);
+    S.awaitingFeedback=true;
+    const btn=document.getElementById("btnSubmit");
+    btn.textContent="OK";
+    btn.disabled=false;
+  } catch(e){ midFail(e.message); }
+}
+
+function nextQ(){
+  S.q++;
+  S.q < S.questions.length ? loadQ(S.q) : results();
+}
+
+function midFail(detail){
+  S.mode="static";
+  hide("hAI"); show("hStatic");
+  document.getElementById("noticeDetail").textContent = detail||"AI became unavailable.";
+  resumeFromStatic = S.q;
+  showScreen("sNotice");
+}
+
+/* ── Static MCQ mode ── */
+function loadMCQ(i){
+  const fq=S.fallback[i], fb=fq.fallback;
+  S.mcqSel=null; S.mcqDone=false;
+  prog(i);
+  document.getElementById("mcqN").textContent   = `Q${i+1} / ${S.fallback.length}`;
+  document.getElementById("mcqTag").textContent = fq.topic;
+  document.getElementById("mcqPts").textContent = `${fq.maxScore} pts`;
+  document.getElementById("mcqText").textContent = fb.question;
+  document.getElementById("mcqOpts").innerHTML = fb.options.map((o,idx)=>`
+    <label class="mcq-opt" id="mo-${idx}">
+      <input type="radio" name="mcq" value="${idx}" onchange="selOpt(${idx})" />
+      ${o.text}
+    </label>`).join("");
+  const fb_el=document.getElementById("mcqFb");
+  fb_el.style.display="none"; fb_el.className="mcq-fb";
+  const btn=document.getElementById("btnMcq");
+  btn.disabled=true; btn.textContent="Submit"; btn.onclick=submitMCQ;
+}
+
+function selOpt(i){
+  if(S.mcqDone) return;
+  S.mcqSel=i;
+  document.querySelectorAll(".mcq-opt").forEach((el,idx)=>{
+    el.className="mcq-opt"+(idx===i?" selected":"");
+  });
+  document.getElementById("btnMcq").disabled=false;
+}
+
+function submitMCQ(){
+  if(S.mcqSel===null||S.mcqDone) return;
+  S.mcqDone=true;
+  const fq=S.fallback[S.q], fb=fq.fallback;
+  const ok=fb.options[S.mcqSel].correct;
+  document.querySelectorAll(".mcq-opt").forEach((el,i)=>{
+    el.classList.add("disabled");
+    if(fb.options[i].correct) el.classList.add("correct");
+    else if(i===S.mcqSel&&!ok) el.classList.add("wrong");
+  });
+  const fEl=document.getElementById("mcqFb");
+  fEl.className=`mcq-fb ${ok?"correct":"wrong"}`;
+  fEl.textContent=ok?fb.correctFeedback:fb.wrongFeedback;
+  fEl.style.display="block";
+  pushScore(
+    {topic:fq.topic,maxScore:fq.maxScore,idealAnswer:fq.idealAnswer},
+    [{dimension:"Critical dimension",status:ok?"COVERED":"MISSED",points:ok?fb.points:0}],
+    ok?fb.points:0, true
+  );
+  const btn=document.getElementById("btnMcq");
+  btn.textContent="OK";
+  btn.disabled=false; btn.onclick=nextMCQ;
+}
+
+function nextMCQ(){ S.q++; S.q<S.fallback.length?loadMCQ(S.q):results(); }
+
+/* ── Results ── */
+async function results(){
+  prog(S.questions.length||S.fallback.length);
+  showScreen("sResults");
+  const total=S.scores.reduce((s,q)=>s+q.earned,0);
+  const max=S.scores.reduce((s,q)=>s+q.max,0);
+  const passed=total>=70;
+
+  document.getElementById("resNum").textContent    = total;
+  document.getElementById("resDenom").textContent  = `/ ${max}`;
+  const v=document.getElementById("resVerdict");
+  v.textContent=passed?"Pass":"Not Pass";
+  v.className=`res-verdict-word ${passed?"pass":"fail"}`;
+  if(S.mode==="static") document.getElementById("resModeNote").style.display="block";
+
+  const tbody=document.getElementById("resTbody");
+  tbody.innerHTML=S.scores.map((s,i)=>{
+    const cls=s.earned===s.max?"td-pass":s.earned>0?"td-partial":"td-fail";
+    const dimRows=s.isMCQ
+      ?`<span class="dim-sub"><span class="dim-mark" style="color:${s.earned>0?"var(--pass)":"var(--fail)"}">${s.earned>0?"✓":"✗"}</span>Critical dimension</span>`
+      :s.dimensions.map(d=>{
+        const col=d.status==="COVERED"?"var(--pass)":d.status==="PARTIAL"?"#7A5200":"var(--fail)";
+        const mark=d.status==="COVERED"?"✓":d.status==="PARTIAL"?"~":"✗";
+        return `<span class="dim-sub"><span class="dim-mark" style="color:${col}">${mark}</span>${d.dimension}</span>`;
+      }).join("");
+    return `<tr>
+      <td>Q${i+1}</td>
+      <td><strong>${s.topic}</strong>${dimRows}</td>
+      <td class="${cls}">${s.earned}/${s.max}</td>
+    </tr>
+    <tr class="ideal-row">
+      <td></td>
+      <td colspan="2">
+        <div class="ideal-inner"><strong>Ideal answer</strong>${s.idealAnswer}</div>
+      </td>
+    </tr>`;
+  }).join("");
+
+  document.getElementById("submitStatus").textContent="Recording results...";
+  try {
+    const submission = await post("/api/submit-score",{
+      name:S.name, totalScore:total, maxScore:max,
+      passed, breakdown:S.scores, timestamp:new Date().toISOString(), mode:S.mode,
+    });
+    document.getElementById("submitStatus").textContent = submission.success
+      ? "Results recorded."
+      : submission.message||"Assessment complete; score recording is not configured.";
+  } catch {
+    document.getElementById("submitStatus").textContent="Could not record — notify your trainer.";
+  }
+}
+
+/* ── Helpers ── */
+function showScreen(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  window.scrollTo(0,0);
+}
+function show(id){ document.getElementById(id).style.display=""; }
+function hide(id){ document.getElementById(id).style.display="none"; }
+function prog(i){
+  const t=S.questions.length||S.fallback.length||6;
+  document.getElementById("hProgNum").textContent=`${i} / ${t}`;
+  document.getElementById("hProgFill").style.width=`${(i/t)*100}%`;
+}
+function setQ(msg,thinking){
+  const el=document.getElementById("qText");
+  if(thinking){ el.className="q-text thinking"; el.innerHTML=`<span class="typing-dots"><span></span><span></span><span></span></span>`; }
+  else { el.className="q-text"; el.textContent=msg; }
+}
+function resetTA(){
+  const ta=document.getElementById("answerInput");
+  const btn=document.getElementById("btnSubmit");
+  ta.value=""; ta.disabled=false; btn.disabled=false; btn.textContent="Submit";
+}
+function lockTA(){
+  document.getElementById("answerInput").disabled=true;
+  document.getElementById("btnSubmit").disabled=true;
+}
+function pushScore(q,dims,earned,isMCQ=false){
+  S.scores.push({topic:q.topic,earned,max:q.maxScore,idealAnswer:q.idealAnswer,dimensions:dims,isMCQ});
+}
+async function post(url,body){
+  const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  try{ return await r.json(); } catch{ return {error:true,status:r.status}; }
+}
+function slug(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,""); }
+
+document.getElementById("answerInput").addEventListener("keydown",event=>{
+  if(event.key==="Enter"&&!event.shiftKey&&window.matchMedia("(pointer: fine)").matches){
+    event.preventDefault();
+    document.getElementById("btnSubmit").click();
+  }
+});
+</script>
+</body>
+</html>
