@@ -10,7 +10,7 @@
  * 6. In your Google Sheet, ensure Tab 2 is named exactly: "Roleplay Scores"
  */
 
-const SHEET_NAME = "Roleplay Scores";
+const SHEET_NAME = "Knowledge Check";
 
 const HEADERS = [
   "Timestamp",
