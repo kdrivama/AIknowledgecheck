@@ -7,7 +7,7 @@
  * 3. Click Deploy → New deployment → Web app
  * 4. Set "Execute as" = Me, "Who has access" = Anyone
  * 5. Copy the Web App URL → paste into Render environment variable APPS_SCRIPT_URL
- * 6. In your Google Sheet, ensure Tab 2 is named exactly: "Roleplay Scores"
+ * 6. In your Google Sheet, ensure Tab 2 is named exactly: "Knowledge Check"
  */
 
 const SHEET_NAME = "Knowledge Check";
