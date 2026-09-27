@@ -18,12 +18,11 @@ const HEADERS = [
   "Total Score",
   "Max Score",
   "Pass / Fail",
-  "Q1 – Promo Code",
-  "Q2 – BNPL",
-  "Q3 – Delivery SLA",
-  "Q4 – Returns",
-  "Q5 – Locked Account",
-  "Q6 – Overall Retention",
+  "Q1 – Campaign Promo Codes (20)",
+  "Q2 – Delivery SLAs (20)",
+  "Q3 – BNPL Pending Escalation SLA (20)",
+  "Q4 – BNPL Escalation Department (15)",
+  "Q5 – Explaining the Delivery SLA (25)",
 ];
 
 function doPost(e) {
@@ -43,6 +42,12 @@ function doPost(e) {
       sheet.setFrozenRows(1);
     }
 
+    const previousHeaderWidth = sheet.getLastColumn();
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    if (previousHeaderWidth > HEADERS.length) {
+      sheet.getRange(1, HEADERS.length + 1, 1, previousHeaderWidth - HEADERS.length).clearContent();
+    }
+
     // Format timestamp
     const ts = new Date(data.timestamp);
     const formatted = Utilities.formatDate(ts, Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
@@ -59,7 +64,6 @@ function doPost(e) {
       data.q3 ?? 0,
       data.q4 ?? 0,
       data.q5 ?? 0,
-      data.q6 ?? 0,
     ]);
 
     // Colour-code the Pass/Fail cell
@@ -92,7 +96,7 @@ function testWrite() {
         maxScore: 100,
         passed: true,
         timestamp: new Date().toISOString(),
-        q1: 20, q2: 20, q3: 15, q4: 15, q5: 10, q6: 5,
+        q1: 20, q2: 20, q3: 15, q4: 10, q5: 20,
       }),
     },
   };

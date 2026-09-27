@@ -417,8 +417,8 @@ app.post("/api/tutor-message", (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 app.post("/api/submit-score", async (req, res) => {
   const { name, totalScore, maxScore, passed, breakdown, timestamp, mode } = req.body;
-  if (!Array.isArray(breakdown) || breakdown.length !== 6) {
-    return res.status(400).json({ error: "breakdown must be an array of 6 scores" });
+  if (!Array.isArray(breakdown) || breakdown.length !== 5) {
+    return res.status(400).json({ error: "breakdown must be an array of 5 scores" });
   }
   if (!APPS_SCRIPT_URL) {
     return res.json({ success: false, message: "Assessment complete; score recording is not configured." });
@@ -433,7 +433,6 @@ app.post("/api/submit-score", async (req, res) => {
       q3: breakdown[2]?.earned ?? 0,
       q4: breakdown[3]?.earned ?? 0,
       q5: breakdown[4]?.earned ?? 0,
-      q6: breakdown[5]?.earned ?? 0,
     };
     const response = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
