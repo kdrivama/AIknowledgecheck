@@ -11,13 +11,19 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Allow embedding in Rise / Articulate iframes
+app.use((req, res, next) => {
+  res.setHeader("X-Frame-Options", "ALLOWALL");
+  res.setHeader("Content-Security-Policy", "frame-ancestors *");
+  next();
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 
 // ─── API keys ────────────────────────────────────────────────────────────────
-const GEMINI_API_KEY     = process.env.GEMINI_API_KEY;
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const DEEPSEEK_API_KEY   = process.env.DEEPSEEK_API_KEY;
-const APPS_SCRIPT_URL    = process.env.APPS_SCRIPT_URL;
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const APPS_SCRIPT_URL  = process.env.APPS_SCRIPT_URL;
 
 // ─── Campaign context ────────────────────────────────────────────────────────
 const CAMPAIGN_CONTEXT = `
@@ -27,24 +33,36 @@ Mid-Season Campaign update course.
 
 CAMPAIGN KNOWLEDGE BASE — use this to evaluate all answers:
 
-1. CAMPAIGN PROMO CODES
-  - All three valid codes are Kstore30, Flash15, and Newuser10
-  - Evaluate each code independently; accept case-insensitive spelling
+1. PROMO CODES (three active codes for this campaign)
+   - KSTORE30: Campaign discount code, now active
+   - FLASH15: Short-window offer with category limits
+   - NEWUSER10: Use only when customer profile qualifies
+   - Agents must know all three codes and their conditions
+   - Check category eligibility before confirming any code should work
+   - Flexible: agent mentions all three codes with broadly correct descriptions
 
-2. DELIVERY SERVICE LEVELS
-  - Standard delivery SLA is 5-7 days
-  - Express delivery SLA is 2-3 days
+2. DELIVERY SLA (two tiers)
+   - Standard delivery: 5–7 days (extended due to high campaign volume)
+   - Express delivery: 2–3 days
+   - Agents must know both tiers and their specific day ranges
+   - Flexible: approximate figures in the right range count
 
 3. BNPL_PENDING ESCALATION SLA
-  - Allow 24 hours for BNPL_PENDING to resolve before escalating
+   - SLA before escalating a BNPL_PENDING case: 24 hours
+   - If status has not resolved within 24 hours, escalate
+   - Agents must know the 24-hour threshold specifically
+   - Flexible: "one day" or "24 hrs" counts
 
 4. BNPL ESCALATION DEPARTMENT
-  - Escalate pending BNPL cases to Finance
+   - BNPL_PENDING cases that exceed SLA must be escalated to: Finance department
+   - Not payments team, not supervisor — specifically Finance
+   - Flexible: "Finance" or "Finance team" or "Finance department" all count
 
-5. EXPLAINING THE STANDARD DELIVERY SLA
-  - Explain that higher order volume received during the campaign extended
-    the standard delivery SLA to 5-7 days
-  - Communicate the reason clearly and respectfully
+5. CUSTOMER PUSHBACK ON EXTENDED SLA
+   - If customer pushes back on why delivery changed to 5–7 days:
+   - Correct explanation: due to higher order volume received during the campaign, the SLA is extended accordingly
+   - Must convey: volume-driven reason, campaign context, matter-of-fact tone
+   - Flexible: paraphrase that conveys volume + campaign context counts
 
 EVALUATION PRINCIPLES:
 - Evaluate intent and understanding, NOT word-for-word accuracy
@@ -56,197 +74,162 @@ EVALUATION PRINCIPLES:
 // ─── Question definitions ────────────────────────────────────────────────────
 const QUESTIONS = [
   {
-    id: 1, topic: "Campaign Promo Codes", maxScore: 20,
-    question: `What are all three promo codes available for this campaign?`,
+    id: 1,
+    topic: "Promo Codes",
+    maxScore: 20,
+    question: `This campaign has three active promo codes. Can you name all three and briefly describe when each one applies?`,
     dimensions: [
-      { name: "Identifies Kstore30", points: 7 },
-      { name: "Identifies Flash15", points: 7 },
-      { name: "Identifies Newuser10", points: 6 },
+      { name: "KSTORE30 identified correctly", points: 7 },
+      { name: "FLASH15 identified correctly", points: 7 },
+      { name: "NEWUSER10 identified correctly", points: 6 },
     ],
     hints: {
-      "Identifies Kstore30": "One of the campaign codes is Kstore30. What are the other two?",
-      "Identifies Flash15": "You have some of the codes. Which campaign code is Flash15?",
-      "Identifies Newuser10": "You have some of the codes. Which campaign code is Newuser10?",
+      "KSTORE30 identified correctly": "You've got some of the codes — what's the main campaign discount code that's now active across the board?",
+      "FLASH15 identified correctly": "Good — there's also a short-window offer with category limits. Which code is that?",
+      "NEWUSER10 identified correctly": "Almost there — there's a third code that only applies when the customer profile qualifies. What is it?",
     },
-    idealAnswer: "The three campaign promo codes are Kstore30, Flash15, and Newuser10.",
+    idealAnswer: "KSTORE30 — the main campaign discount code, now active. FLASH15 — a short-window offer with category limits. NEWUSER10 — only applied when the customer profile qualifies.",
     fallback: {
-      question: "Which option lists all three campaign promo codes?",
+      question: "Which of the following correctly lists all three active promo codes for this campaign?",
       options: [
-        { text: "Kstore30, Flash15, and Newuser10", correct: true },
-        { text: "Kstore30, Flash10, and Newuser15", correct: false },
-        { text: "Kstore30 and Flash15 only", correct: false },
-        { text: "Flash15, Newuser10, and Welcome20", correct: false },
+        { text: "KSTORE30, FLASH20, NEWUSER10", correct: false },
+        { text: "KSTORE30, FLASH15, NEWUSER10", correct: true },
+        { text: "KSTORE30, FLASH15, NEWUSER15", correct: false },
+        { text: "SALE30, FLASH15, NEWUSER10", correct: false },
       ],
       points: 20,
-      correctFeedback: "Correct. All three campaign codes are Kstore30, Flash15, and Newuser10.",
-      wrongFeedback: "Incorrect. The three campaign codes are Kstore30, Flash15, and Newuser10.",
+      correctFeedback: "Correct. All three campaign codes: KSTORE30, FLASH15, and NEWUSER10.",
+      wrongFeedback: "Incorrect. The three active codes are KSTORE30 (main campaign discount), FLASH15 (short-window with category limits), and NEWUSER10 (qualifying profiles only).",
     },
   },
   {
-    id: 2, topic: "Delivery SLAs", maxScore: 20,
-    question: `What are the delivery SLAs for standard and express delivery during the campaign?`,
+    id: 2,
+    topic: "Delivery SLA",
+    maxScore: 20,
+    question: `A customer asks about delivery times. What are our current SLA windows for standard and express delivery?`,
     dimensions: [
-      { name: "Standard delivery is 5-7 days", points: 8 },
-      { name: "Express delivery is 2-3 days", points: 8 },
-      { name: "Correctly distinguishes both service levels", points: 4 },
+      { name: "Standard delivery SLA correct", points: 10 },
+      { name: "Express delivery SLA correct", points: 10 },
     ],
     hints: {
-      "Standard delivery is 5-7 days": "What is the standard delivery SLA?",
-      "Express delivery is 2-3 days": "And what is the express delivery SLA?",
-      "Correctly distinguishes both service levels": "State which SLA applies to standard and which applies to express delivery.",
+      "Standard delivery SLA correct": "You've mentioned express — what's the standard delivery window during this campaign period?",
+      "Express delivery SLA correct": "Good on standard — what about express delivery? What's the specific day range?",
     },
-    idealAnswer: "Standard delivery is 5-7 days. Express delivery is 2-3 days.",
+    idealAnswer: "Standard delivery: 5–7 days (extended during the campaign due to high order volume). Express delivery: 2–3 days.",
     fallback: {
-      question: "Which delivery SLA pairing is correct?",
+      question: "What are the correct SLA windows for standard and express delivery during this campaign?",
       options: [
-        { text: "Standard: 5-7 days; Express: 2-3 days", correct: true },
-        { text: "Standard: 2-3 days; Express: 5-7 days", correct: false },
-        { text: "Standard: 5-7 days; Express: 5-7 days", correct: false },
-        { text: "Standard: 3-5 days; Express: 1-2 days", correct: false },
+        { text: "Standard: 3–5 days / Express: 1–2 days", correct: false },
+        { text: "Standard: 5–7 days / Express: 2–3 days", correct: true },
+        { text: "Standard: 5–7 days / Express: 1–2 days", correct: false },
+        { text: "Standard: 7–10 days / Express: 2–3 days", correct: false },
       ],
       points: 20,
-      correctFeedback: "Correct. Standard delivery is 5-7 days and express delivery is 2-3 days.",
-      wrongFeedback: "Incorrect. Standard delivery is 5-7 days; express delivery is 2-3 days.",
+      correctFeedback: "Correct. Standard is 5–7 days, express is 2–3 days.",
+      wrongFeedback: "Incorrect. Standard delivery is 5–7 days (extended due to campaign volume). Express delivery is 2–3 days.",
     },
   },
   {
-    id: 3, topic: "BNPL Pending Escalation SLA", maxScore: 20,
-    question: `How long should a BNPL_PENDING case be allowed to remain pending before escalating it?`,
+    id: 3,
+    topic: "BNPL Escalation SLA",
+    maxScore: 20,
+    question: `A customer's order shows BNPL_PENDING. You have been monitoring it. What is the SLA window before you should escalate this case?`,
     dimensions: [
-      { name: "Allows 24 hours for BNPL_PENDING", points: 12 },
-      { name: "Escalates if still pending after 24 hours", points: 8 },
+      { name: "24-hour SLA threshold stated", points: 20 },
     ],
     hints: {
-      "Allows 24 hours for BNPL_PENDING": "What is the BNPL_PENDING waiting period before escalation?",
-      "Escalates if still pending after 24 hours": "At what point should the case be escalated if it has not resolved?",
+      "24-hour SLA threshold stated": "You're on the right track — what's the specific time threshold the training gives before BNPL_PENDING becomes an escalation trigger?",
     },
-    idealAnswer: "Allow BNPL_PENDING up to 24 hours to resolve before escalating. If it is still pending after 24 hours, escalate the case.",
+    idealAnswer: "24 hours. If a BNPL_PENDING status has not resolved within 24 hours, the case should be escalated.",
     fallback: {
-      question: "What is the escalation SLA for a BNPL_PENDING case?",
+      question: "How long should you wait before escalating an unresolved BNPL_PENDING case?",
       options: [
-        { text: "Wait 24 hours; escalate if it is still pending", correct: true },
-        { text: "Escalate immediately when the status appears", correct: false },
-        { text: "Wait 48 hours before escalating", correct: false },
-        { text: "Do not escalate BNPL_PENDING cases", correct: false },
+        { text: "12 hours", correct: false },
+        { text: "24 hours", correct: true },
+        { text: "48 hours", correct: false },
+        { text: "72 hours", correct: false },
       ],
       points: 20,
-      correctFeedback: "Correct. Allow 24 hours, then escalate if the case is still pending.",
-      wrongFeedback: "Incorrect. BNPL_PENDING cases should be allowed 24 hours before escalation.",
+      correctFeedback: "Correct. 24 hours is the SLA threshold before escalating a BNPL_PENDING case.",
+      wrongFeedback: "Incorrect. The SLA is 24 hours. If BNPL_PENDING has not resolved within 24 hours, escalate.",
     },
   },
   {
-    id: 4, topic: "BNPL Escalation Department", maxScore: 15,
-    question: `Which department should receive BNPL cases that need escalation?`,
+    id: 4,
+    topic: "BNPL Escalation Path",
+    maxScore: 20,
+    question: `A BNPL_PENDING case has exceeded the SLA. Which department do you escalate it to?`,
     dimensions: [
-      { name: "Identifies Finance department", points: 10 },
-      { name: "Routes pending BNPL cases to Finance", points: 5 },
+      { name: "Finance department identified", points: 20 },
     ],
     hints: {
-      "Identifies Finance department": "Which department owns these escalations?",
-      "Routes pending BNPL cases to Finance": "Where should an unresolved pending BNPL case be sent?",
+      "Finance department identified": "Think about which internal team handles payment provider disputes and financial holds — which department is that?",
     },
-    idealAnswer: "Escalate pending BNPL cases to the Finance department.",
+    idealAnswer: "Finance department. BNPL_PENDING cases that exceed the 24-hour SLA are escalated to Finance, not to a supervisor or the payments team.",
     fallback: {
-      question: "Which department should handle escalated pending BNPL cases?",
+      question: "When a BNPL_PENDING case exceeds the SLA, which department should you escalate it to?",
       options: [
-        { text: "Finance", correct: true },
-        { text: "Customer Support", correct: false },
-        { text: "Marketing", correct: false },
-        { text: "Delivery Operations", correct: false },
+        { text: "Your direct supervisor", correct: false },
+        { text: "Payments team", correct: false },
+        { text: "Finance department", correct: true },
+        { text: "Customer experience team", correct: false },
       ],
-      points: 15,
-      correctFeedback: "Correct. Pending BNPL escalations go to Finance.",
-      wrongFeedback: "Incorrect. Pending BNPL escalations should be sent to Finance.",
+      points: 20,
+      correctFeedback: "Correct. BNPL escalations go to the Finance department.",
+      wrongFeedback: "Incorrect. BNPL_PENDING cases that exceed SLA are escalated to the Finance department — not a supervisor or the payments team.",
     },
   },
   {
-    id: 5, topic: "Explaining the Delivery SLA", maxScore: 25,
-    question: `A customer pushes back and asks why the standard delivery SLA changed to 5-7 days. How would you explain the change?`,
+    id: 5,
+    topic: "SLA Pushback Handling",
+    maxScore: 20,
+    question: `A customer is frustrated and pushes back — they say the website showed 3–5 days when they ordered, and now it says 5–7. They want an explanation. What do you tell them?`,
     dimensions: [
-      { name: "Explains higher order volume", points: 10 },
-      { name: "States standard SLA is extended to 5-7 days", points: 10 },
-      { name: "Gives a clear and respectful explanation", points: 5 },
+      { name: "Volume-driven reason given", points: 10 },
+      { name: "Campaign context referenced", points: 10 },
     ],
     hints: {
-      "Explains higher order volume": "What campaign-related factor caused the delivery SLA to change?",
-      "States standard SLA is extended to 5-7 days": "What is the updated standard delivery SLA?",
-      "Gives a clear and respectful explanation": "How can you explain the change clearly and respectfully to the customer?",
+      "Volume-driven reason given": "Good start — what's the specific reason the SLA extended? What caused the change?",
+      "Campaign context referenced": "You've got the reason — make sure you're also tying it to the campaign context so the customer understands why now specifically.",
     },
-    idealAnswer: "Due to the higher order volume we received during the campaign, the standard delivery SLA has been extended to 5-7 days. Explain this clearly and respectfully.",
+    idealAnswer: "Due to the higher order volume we received during the campaign, the standard delivery SLA has been extended to 5–7 days. This is a temporary adjustment to manage the increased demand.",
     fallback: {
-      question: "What is the correct explanation for the standard delivery SLA changing to 5-7 days?",
+      question: "A customer pushes back on the 5–7 day delivery window. What is the correct explanation to give them?",
       options: [
-        { text: "Higher order volume during the campaign extended the standard delivery SLA to 5-7 days", correct: true },
-        { text: "The express delivery SLA changed to 5-7 days because of a new payment method", correct: false },
-        { text: "The standard delivery SLA is still 3-5 days; the website is incorrect", correct: false },
-        { text: "The SLA changed permanently because the returns policy changed", correct: false },
+        { text: "There is a courier partner issue affecting all deliveries right now.", correct: false },
+        { text: "Due to the higher volume we received during the campaign, the SLA has been extended accordingly.", correct: true },
+        { text: "Our warehouse is relocating, which has caused temporary delays.", correct: false },
+        { text: "Express delivery is available if they want a faster option.", correct: false },
       ],
-      points: 25,
-      correctFeedback: "Correct. Higher campaign order volume extended standard delivery to 5-7 days.",
-      wrongFeedback: "Incorrect. Explain that higher campaign order volume extended standard delivery to 5-7 days.",
+      points: 20,
+      correctFeedback: "Correct. Volume during the campaign is the reason — state it clearly and matter-of-factly.",
+      wrongFeedback: "Incorrect. The correct explanation is that higher order volume during the campaign has extended the SLA. Do not attribute it to couriers, warehouses, or unrelated causes.",
     },
   },
 ];
 
 // ════════════════════════════════════════════════════════════════════════════
-// AI LAYERS
+// AI LAYER — DeepSeek only
 // ════════════════════════════════════════════════════════════════════════════
-async function callGemini(prompt) {
-  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not set");
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 1024 },
-    }),
-  });
-  if (!res.ok) { const e = await res.text(); throw new Error(`Gemini HTTP ${res.status}: ${e}`); }
-  const data = await res.json();
-  if (data.promptFeedback?.blockReason) throw new Error(`Gemini blocked: ${data.promptFeedback.blockReason}`);
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("Gemini returned empty response");
-  console.log("[Gemini] OK");
-  return text;
-}
-
-async function callOpenRouter(prompt) {
-  if (!OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY not set");
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+async function callDeepSeek(prompt) {
+  if (!DEEPSEEK_API_KEY) throw new Error("DEEPSEEK_API_KEY not set");
+  const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-      "HTTP-Referer": "https://kstore-tutor.onrender.com",
-      "X-Title": "K Store AI Tutor",
+      "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
     },
-    body: JSON.stringify({
-      model: "meta-llama/llama-3.1-8b-instruct:free",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.3, max_tokens: 1024,
-    }),
-  });
-  if (!res.ok) { const e = await res.text(); throw new Error(`OpenRouter HTTP ${res.status}: ${e}`); }
-  const data = await res.json();
-  const text = data.choices?.[0]?.message?.content;
-  if (!text) throw new Error("OpenRouter returned empty response");
-  console.log("[OpenRouter] OK");
-  return text;
-}
-
-async function callDeepSeek(prompt) {
-  if (!DEEPSEEK_API_KEY) throw new Error("DEEPSEEK_API_KEY not set");
-  const res = await fetch("https://api.deepseek.com/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${DEEPSEEK_API_KEY}` },
     body: JSON.stringify({
       model: "deepseek-chat",
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.3, max_tokens: 1024,
+      temperature: 0.3,
+      max_tokens: 1024,
     }),
   });
-  if (!res.ok) { const e = await res.text(); throw new Error(`DeepSeek HTTP ${res.status}: ${e}`); }
+  if (!res.ok) {
+    const e = await res.text();
+    throw new Error(`DeepSeek HTTP ${res.status}: ${e}`);
+  }
   const data = await res.json();
   const text = data.choices?.[0]?.message?.content;
   if (!text) throw new Error("DeepSeek returned empty response");
@@ -254,23 +237,10 @@ async function callDeepSeek(prompt) {
   return text;
 }
 
-// ─── Fallback chain ───────────────────────────────────────────────────────────
-async function callAI(prompt) {
-  const errors = [];
-  for (const [fn, name] of [[callGemini, "Gemini"], [callOpenRouter, "OpenRouter"], [callDeepSeek, "DeepSeek"]]) {
-    try { const text = await fn(prompt); return { text, provider: name }; }
-    catch (e) { console.warn(`[${name}] failed:`, e.message); errors.push(`${name}: ${e.message}`); }
-  }
-  throw new Error(`ALL_AI_FAILED: ${errors.join(" | ")}`);
-}
-
-// ─── Extract JSON robustly from any AI response ───────────────────────────────
+// ─── Extract JSON robustly from AI response ───────────────────────────────────
 function extractJSON(raw) {
-  // Strip markdown fences
   const cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-  // Try direct parse
   try { return JSON.parse(cleaned); } catch (_) {}
-  // Bracket-counting extraction — finds the first complete {...} block
   let depth = 0, start = -1;
   for (let i = 0; i < cleaned.length; i++) {
     if (cleaned[i] === "{") { if (depth === 0) start = i; depth++; }
@@ -294,7 +264,7 @@ function clampPoints(results, question) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// HEALTH CHECK — cached for 60 seconds
+// HEALTH CHECK — DeepSeek only, cached 60s
 // ════════════════════════════════════════════════════════════════════════════
 let healthCache = null;
 let healthCacheTime = 0;
@@ -305,22 +275,20 @@ app.get("/api/health", async (req, res) => {
   if (healthCache && now - healthCacheTime < HEALTH_TTL) {
     return res.json(healthCache);
   }
-  const probe = "Reply with only the word: OK";
-  const errors = [];
-  for (const [fn, name] of [[callGemini, "gemini"], [callOpenRouter, "openrouter"], [callDeepSeek, "deepseek"]]) {
-    try {
-      const text = await fn(probe);
-      if (text.toLowerCase().includes("ok")) {
-        healthCache = { aiAvailable: true, provider: name };
-        healthCacheTime = now;
-        return res.json(healthCache);
-      }
-      errors.push(`${name}: responded but not OK`);
-    } catch (e) { errors.push(`${name}: ${e.message}`); }
+  try {
+    const text = await callDeepSeek("Reply with only the word: OK");
+    if (text.toLowerCase().includes("ok")) {
+      healthCache = { aiAvailable: true, provider: "deepseek" };
+      healthCacheTime = now;
+      return res.json(healthCache);
+    }
+    throw new Error("DeepSeek responded but not OK");
+  } catch (e) {
+    console.warn("[Health] DeepSeek failed:", e.message);
+    healthCache = { aiAvailable: false, errors: [`DeepSeek: ${e.message}`] };
+    healthCacheTime = now;
+    res.json(healthCache);
   }
-  healthCache = { aiAvailable: false, errors };
-  healthCacheTime = now;
-  res.json(healthCache);
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -384,16 +352,13 @@ Return ONLY a valid JSON object, no other text:
 }`;
 
   try {
-    const { text } = await callAI(prompt);
+    const text = await callDeepSeek(prompt);
     const parsed = extractJSON(text);
-    // Fix issue #2 — clamp points to dimension maximums
     if (parsed.results) parsed.results = clampPoints(parsed.results, q);
     res.json(parsed);
   } catch (err) {
-    if (err.message.startsWith("ALL_AI_FAILED")) {
-      return res.status(503).json({ allAiFailed: true, detail: err.message });
-    }
-    res.status(500).json({ error: "Evaluation failed", detail: err.message });
+    console.error("DeepSeek error:", err.message);
+    res.status(503).json({ allAiFailed: true, detail: err.message });
   }
 });
 
@@ -416,12 +381,10 @@ app.post("/api/tutor-message", (req, res) => {
 // SUBMIT SCORE
 // ════════════════════════════════════════════════════════════════════════════
 app.post("/api/submit-score", async (req, res) => {
+  if (!APPS_SCRIPT_URL) return res.status(500).json({ error: "APPS_SCRIPT_URL not configured" });
   const { name, totalScore, maxScore, passed, breakdown, timestamp, mode } = req.body;
   if (!Array.isArray(breakdown) || breakdown.length !== 5) {
     return res.status(400).json({ error: "breakdown must be an array of 5 scores" });
-  }
-  if (!APPS_SCRIPT_URL) {
-    return res.json({ success: false, message: "Assessment complete; score recording is not configured." });
   }
   try {
     const payload = {

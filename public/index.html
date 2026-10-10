@@ -41,6 +41,33 @@
       -webkit-font-smoothing: antialiased;
     }
 
+    /* ── Responsive scaling for Storyline iframe embed ── */
+    /* When rendered inside a small Storyline frame, everything scales down */
+    @media (max-width: 600px) {
+      main { padding: 24px 16px 60px; }
+      .w-heading { font-size: clamp(24px, 7vw, 40px); }
+      .w-sub { font-size: 13px; }
+      .rule-n { font-size: 22px; }
+      .rule-d { font-size: 10px; }
+      .btn { padding: 10px 18px; font-size: 12px; }
+      .q-text { font-size: 14px; }
+      textarea { font-size: 13px; }
+      .mcq-text { font-size: 14px; }
+      .mcq-opt { font-size: 13px; padding: 10px 12px; }
+      .res-score-num { font-size: 40px; }
+      .res-verdict-word { font-size: 28px; }
+      .res-table td { font-size: 11px; }
+    }
+
+    @media (max-width: 400px) {
+      main { padding: 16px 12px 40px; }
+      .w-heading { font-size: 22px; }
+      .rules-strip { grid-template-columns: repeat(3,1fr); }
+      .rule-n { font-size: 18px; }
+      header { padding: 0 12px; }
+      .h-context { display: none; }
+    }
+
     /* ── Header ── */
     header {
       width: 100%;
@@ -334,26 +361,63 @@ const S = {
 };
 let resumeFromStatic = null;
 
+/* ── Name resolution ── */
+// Priority order:
+// 1. URL parameter ?name= (set by name-capture.html — most reliable across domains)
+// 2. postMessage (same-lesson same-domain only)
+// 3. localStorage (same-domain only — fallback)
+
+var nameFromURL = "";
+
+function applyName(name, autoStart) {
+  if (!name || !name.trim()) return;
+  var clean = name.trim();
+  S.name = clean;
+  var input = document.getElementById("nameInput");
+  if (input) input.value = clean;
+  try { localStorage.setItem("kstore_participant_name", clean); } catch(e) {}
+  // If name came from URL param, skip welcome screen and start immediately
+  if (autoStart) {
+    // Wait for boot (questions fetch) to complete before starting
+    var tryStart = setInterval(function() {
+      if (S.questions.length > 0 || S.fallback.length > 0) {
+        clearInterval(tryStart);
+        start(true); // true = skip name validation
+      }
+    }, 100);
+  }
+}
+
+// Channel 1 — URL parameter (RELIABLE across domains and lessons)
+(function readURLParam() {
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var urlName = params.get("name");
+    if (urlName && urlName.trim()) {
+      nameFromURL = decodeURIComponent(urlName.trim());
+      applyName(nameFromURL, true); // auto-start
+    }
+  } catch(e) {}
+})();
+
+// Channel 2 — postMessage (same-lesson only)
+window.addEventListener("message", function(event) {
+  if (event.data && event.data.type === "KSTORE_NAME" && event.data.name) {
+    if (!nameFromURL) applyName(event.data.name, false);
+  }
+});
+
+// Channel 3 — localStorage fallback (same domain only)
+window.addEventListener("load", function() {
+  if (nameFromURL) return; // URL param already handled
+  try {
+    var stored = localStorage.getItem("kstore_participant_name");
+    if (stored && stored.trim()) applyName(stored.trim(), false);
+  } catch(e) {}
+});
+
 /* ── Boot ── */
 let aiOK = true, aiErr = "";
-
-// Read name from URL parameter (passed from Storyline/Rise) OR localStorage
-// e.g. https://your-app.onrender.com?name=Sarah+Lim
-(function readNameFromURL() {
-  const params = new URLSearchParams(window.location.search);
-  const urlName = params.get("name");
-  if (urlName && urlName.trim()) {
-    const clean = decodeURIComponent(urlName.trim());
-    document.getElementById("nameInput").value = clean;
-    localStorage.setItem("kstore_participant_name", clean);
-  } else {
-    // Fallback: try localStorage (set by Storyline name capture block)
-    const stored = localStorage.getItem("kstore_participant_name");
-    if (stored && stored.trim()) {
-      document.getElementById("nameInput").value = stored.trim();
-    }
-  }
-})();
 
 (async () => {
   try {
@@ -371,12 +435,13 @@ let aiOK = true, aiErr = "";
 })();
 
 /* ── Welcome ── */
-function start(){
+function start(skipValidation){
   const n = document.getElementById("nameInput").value.trim();
-  if(!n){ alert("Please enter your name."); return; }
-  S.name = n;
-  // Persist for Storyline/Rise blocks that read localStorage
-  localStorage.setItem("kstore_participant_name", n);
+  if(!skipValidation && !n){ alert("Please enter your name."); return; }
+  if(n) {
+    S.name = n;
+    try { localStorage.setItem("kstore_participant_name", n); } catch(e) {}
+  }
   show("hProgress");
   if(aiOK){
     S.mode="ai";

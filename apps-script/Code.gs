@@ -1,15 +1,3 @@
-/**
- * K Store Tutor — Google Apps Script Webhook
- * 
- * SETUP INSTRUCTIONS:
- * 1. Go to script.google.com → New project
- * 2. Paste this entire file into the editor
- * 3. Click Deploy → New deployment → Web app
- * 4. Set "Execute as" = Me, "Who has access" = Anyone
- * 5. Copy the Web App URL → paste into Render environment variable APPS_SCRIPT_URL
- * 6. In your Google Sheet, ensure Tab 2 is named exactly: "Knowledge Check"
- */
-
 const SHEET_NAME = "Knowledge Check";
 
 const HEADERS = [
@@ -21,8 +9,8 @@ const HEADERS = [
   "Q1 – Campaign Promo Codes (20)",
   "Q2 – Delivery SLAs (20)",
   "Q3 – BNPL Pending Escalation SLA (20)",
-  "Q4 – BNPL Escalation Department (15)",
-  "Q5 – Explaining the Delivery SLA (25)",
+  "Q4 – BNPL Escalation Department (20)",
+  "Q5 – Explaining the Delivery SLA (20)",
 ];
 
 function doPost(e) {
@@ -37,11 +25,12 @@ function doPost(e) {
       sheet.appendRow(HEADERS);
       sheet.getRange(1, 1, 1, HEADERS.length)
         .setFontWeight("bold")
-        .setBackground("#1a2240")
-        .setFontColor("#ffffff");
+        .setBackground("#0A0A0A")
+        .setFontColor("#F0EDE8");
       sheet.setFrozenRows(1);
     }
 
+    // Always sync headers in case they changed
     const previousHeaderWidth = sheet.getLastColumn();
     sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
     if (previousHeaderWidth > HEADERS.length) {
@@ -70,10 +59,13 @@ function doPost(e) {
     const lastRow = sheet.getLastRow();
     const passCell = sheet.getRange(lastRow, 5);
     if (data.passed) {
-      passCell.setBackground("#d4f4dd").setFontColor("#166534");
+      passCell.setBackground("#DFF0E8").setFontColor("#1A5C35");
     } else {
-      passCell.setBackground("#fee2e2").setFontColor("#991b1b");
+      passCell.setBackground("#F5E0E0").setFontColor("#7A1A1A");
     }
+
+    // Auto-resize columns for readability
+    sheet.autoResizeColumns(1, HEADERS.length);
 
     return ContentService
       .createTextOutput(JSON.stringify({ success: true, row: lastRow }))
@@ -92,11 +84,15 @@ function testWrite() {
     postData: {
       contents: JSON.stringify({
         name: "Test Agent",
-        totalScore: 85,
+        totalScore: 80,
         maxScore: 100,
         passed: true,
         timestamp: new Date().toISOString(),
-        q1: 20, q2: 20, q3: 15, q4: 10, q5: 20,
+        q1: 20,
+        q2: 20,
+        q3: 20,
+        q4: 20,
+        q5: 0,
       }),
     },
   };
