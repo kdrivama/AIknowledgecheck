@@ -363,22 +363,13 @@ let resumeFromStatic = null;
 /* ── Name resolution ── */
 var nameFromURL = "";
 
-function applyName(name, autoStart) {
+function applyName(name) {
   if (!name || !name.trim()) return;
   var clean = name.trim();
   S.name = clean;
   var input = document.getElementById("nameInput");
   if (input) input.value = clean;
   try { localStorage.setItem("kstore_participant_name", clean); } catch(e) {}
-
-  if (autoStart) {
-    var tryStart = setInterval(function() {
-      if (S.questions.length > 0 || S.fallback.length > 0) {
-        clearInterval(tryStart);
-        start(true);
-      }
-    }, 100);
-  }
 }
 
 (function readURLParam() {
@@ -387,16 +378,14 @@ function applyName(name, autoStart) {
     var urlName = params.get("name");
     if (urlName && urlName.trim()) {
       nameFromURL = decodeURIComponent(urlName.trim());
-      applyName(nameFromURL, false);
+      applyName(nameFromURL);
     }
   } catch(e) {}
 })();
 
 window.addEventListener("message", function(event) {
-  if (event.data && event.data.type === "KSTORE_NAME_SET" && event.data.name) {
-    applyName(event.data.name, false);
-  } else if (event.data && event.data.type === "KSTORE_NAME" && event.data.name) {
-    if (!nameFromURL) applyName(event.data.name, false);
+  if (event.data && (event.data.type === "KSTORE_SET_NAME" || event.data.type === "KSTORE_NAME_SET" || event.data.type === "KSTORE_NAME")) {
+    if (event.data.name) applyName(event.data.name);
   }
 });
 
@@ -404,7 +393,7 @@ window.addEventListener("load", function() {
   if (nameFromURL) return;
   try {
     var stored = localStorage.getItem("kstore_participant_name");
-    if (stored && stored.trim()) applyName(stored.trim(), false);
+    if (stored && stored.trim()) applyName(stored.trim());
   } catch(e) {}
 });
 
