@@ -41,8 +41,7 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ── Responsive scaling for Storyline iframe embed ── */
-    /* When rendered inside a small Storyline frame, everything scales down */
+    /* ── Responsive scaling for Storyline / Rise iframe embed ── */
     @media (max-width: 600px) {
       main { padding: 24px 16px 60px; }
       .w-heading { font-size: clamp(24px, 7vw, 40px); }
@@ -362,11 +361,6 @@ const S = {
 let resumeFromStatic = null;
 
 /* ── Name resolution ── */
-// Priority order:
-// 1. URL parameter ?name= (set by name-capture.html — most reliable across domains)
-// 2. postMessage (same-lesson same-domain only)
-// 3. localStorage (same-domain only — fallback)
-
 var nameFromURL = "";
 
 function applyName(name, autoStart) {
@@ -376,40 +370,42 @@ function applyName(name, autoStart) {
   var input = document.getElementById("nameInput");
   if (input) input.value = clean;
   try { localStorage.setItem("kstore_participant_name", clean); } catch(e) {}
-  // If name came from URL param, skip welcome screen and start immediately
+
+  // If explicitly requested to auto-start immediately
   if (autoStart) {
-    // Wait for boot (questions fetch) to complete before starting
     var tryStart = setInterval(function() {
       if (S.questions.length > 0 || S.fallback.length > 0) {
         clearInterval(tryStart);
-        start(true); // true = skip name validation
+        start(true);
       }
     }, 100);
   }
 }
 
-// Channel 1 — URL parameter (RELIABLE across domains and lessons)
+// Channel 1 — URL parameter (pre-fills name on Welcome screen)
 (function readURLParam() {
   try {
     var params = new URLSearchParams(window.location.search);
     var urlName = params.get("name");
     if (urlName && urlName.trim()) {
       nameFromURL = decodeURIComponent(urlName.trim());
-      applyName(nameFromURL, true); // auto-start
+      applyName(nameFromURL, false); // false = stay on Welcome screen with pre-filled name
     }
   } catch(e) {}
 })();
 
-// Channel 2 — postMessage (same-lesson only)
+// Channel 2 — postMessage listener
 window.addEventListener("message", function(event) {
-  if (event.data && event.data.type === "KSTORE_NAME" && event.data.name) {
+  if (event.data && event.data.type === "KSTORE_NAME_SET" && event.data.name) {
+    applyName(event.data.name, false);
+  } else if (event.data && event.data.type === "KSTORE_NAME" && event.data.name) {
     if (!nameFromURL) applyName(event.data.name, false);
   }
 });
 
-// Channel 3 — localStorage fallback (same domain only)
+// Channel 3 — localStorage fallback on page load
 window.addEventListener("load", function() {
-  if (nameFromURL) return; // URL param already handled
+  if (nameFromURL) return;
   try {
     var stored = localStorage.getItem("kstore_participant_name");
     if (stored && stored.trim()) applyName(stored.trim(), false);
@@ -451,7 +447,7 @@ function start(skipValidation){
   } else {
     S.mode="static";
     show("hStatic");
-    document.getElementById("noticeDetail").textContent = aiErr||"DeepSeek unavailable.";
+    document.getElementById("noticeDetail").textContent = aiErr||"AI service unavailable.";
     showScreen("sNotice");
   }
 }
