@@ -25,6 +25,47 @@ app.use(express.static(path.join(__dirname, "public")));
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const APPS_SCRIPT_URL  = process.env.APPS_SCRIPT_URL;
 
+// ─── Rate limiting ────────────────────────────────────────────────────────────
+// Limits each IP to MAX_SESSIONS AI assessment sessions per day.
+// Resets every 24 hours. Static MCQ fallback is NOT rate limited
+// (it uses no AI tokens) so blocked users still get an assessment.
+const MAX_SESSIONS   = 3;           // max AI sessions per IP per day
+const RESET_MS       = 24 * 3600_000; // 24 hours in ms
+const ipStore        = new Map();   // IP -> { count, resetAt }
+
+function getClientIP(req) {
+  // Render.com passes the real IP in x-forwarded-for
+  const forwarded = req.headers["x-forwarded-for"];
+  return forwarded ? forwarded.split(",")[0].trim() : req.socket.remoteAddress;
+}
+
+function checkRateLimit(ip) {
+  const now  = Date.now();
+  const entry = ipStore.get(ip);
+
+  if (!entry || now > entry.resetAt) {
+    // First visit or window expired — reset
+    ipStore.set(ip, { count: 1, resetAt: now + RESET_MS });
+    return { allowed: true, remaining: MAX_SESSIONS - 1 };
+  }
+
+  if (entry.count >= MAX_SESSIONS) {
+    const minutesLeft = Math.ceil((entry.resetAt - now) / 60_000);
+    return { allowed: false, minutesLeft };
+  }
+
+  entry.count++;
+  return { allowed: true, remaining: MAX_SESSIONS - entry.count };
+}
+
+// Clean up old entries every hour to prevent memory growth
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of ipStore.entries()) {
+    if (now > entry.resetAt) ipStore.delete(ip);
+  }
+}, 3_600_000);
+
 // ─── Campaign context ────────────────────────────────────────────────────────
 const CAMPAIGN_CONTEXT = `
 You are Coach K, the K Store Training Coach. You conduct a post-training knowledge
@@ -264,6 +305,25 @@ function clampPoints(results, question) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// RATE LIMIT STATUS — check your own IP's remaining sessions
+// ════════════════════════════════════════════════════════════════════════════
+app.get("/api/rate-status", (req, res) => {
+  const ip    = getClientIP(req);
+  const entry = ipStore.get(ip);
+  const now   = Date.now();
+  if (!entry || now > entry.resetAt) {
+    return res.json({ ip, sessions: 0, remaining: MAX_SESSIONS, maxPerDay: MAX_SESSIONS });
+  }
+  res.json({
+    ip,
+    sessions:   entry.count,
+    remaining:  Math.max(0, MAX_SESSIONS - entry.count),
+    maxPerDay:  MAX_SESSIONS,
+    resetsInMin: Math.ceil((entry.resetAt - now) / 60_000),
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // HEALTH CHECK — DeepSeek only, cached 60s
 // ════════════════════════════════════════════════════════════════════════════
 let healthCache = null;
@@ -316,6 +376,22 @@ app.post("/api/evaluate", async (req, res) => {
   if (!questionId || !answer) return res.status(400).json({ error: "questionId and answer required" });
   const q = QUESTIONS.find(q => q.id === questionId);
   if (!q) return res.status(400).json({ error: "Invalid question ID" });
+
+  // Rate limit check — only on Q1 first attempt (not follow-ups or later questions)
+  // This counts one session per Q1 submission rather than per individual answer
+  if (questionId === 1 && !isFollowUp) {
+    const ip = getClientIP(req);
+    const limit = checkRateLimit(ip);
+    if (!limit.allowed) {
+      console.warn(`[RateLimit] Blocked ${ip} — limit reached, resets in ${limit.minutesLeft} min`);
+      // Return allAiFailed so frontend switches to static MCQ (no AI tokens used)
+      return res.status(429).json({
+        allAiFailed: true,
+        detail: `Daily assessment limit reached. You have used all ${MAX_SESSIONS} AI sessions for today. Please try again tomorrow.`,
+      });
+    }
+    console.log(`[RateLimit] ${ip} — session counted, ${limit.remaining} remaining today`);
+  }
 
   const prompt = !isFollowUp
     ? `${CAMPAIGN_CONTEXT}
