@@ -359,6 +359,7 @@ const S = {
   followUp:false, missingDim:null, firstEval:null,
   mcqSel:null, mcqDone:false,
   startTime: null, // set when assessment begins (after welcome screen)
+  currentAns: "", // tracking initial answer for Q
 };
 let resumeFromStatic = null;
 
@@ -469,7 +470,7 @@ function goStatic(){
 /* ── AI mode ── */
 function loadQ(i){
   const q = S.questions[i];
-  S.followUp=false; S.missingDim=null; S.firstEval=null;
+  S.followUp=false; S.missingDim=null; S.firstEval=null; S.currentAns="";
   prog(i);
   document.getElementById("qN").textContent   = `Q${i+1} / ${S.questions.length}`;
   document.getElementById("qTag").textContent = q.topic;
@@ -485,11 +486,12 @@ async function submitAns(){
   const q = S.questions[S.q];
   try {
     if(!S.followUp){
+      S.currentAns = ans;
       const r = await post("/api/evaluate",{questionId:q.id,answer:ans,isFollowUp:false});
       if(r.allAiFailed) return midFail(r.detail);
       S.firstEval = r;
       if(!r.firstMissingDimension){
-        pushScore(q, r.results, r.results.reduce((s,x)=>s+x.points,0));
+        pushScore(q, r.results, r.results.reduce((s,x)=>s+x.points,0), false, S.currentAns);
         setQ(r.tutorResponse, false);
         setTimeout(nextQ, 2000);
       } else {
@@ -498,12 +500,13 @@ async function submitAns(){
         setQ(h.message, false); resetTA();
       }
     } else {
+      const combinedAns = S.currentAns + " | Follow-up: " + ans;
       const r = await post("/api/evaluate",{questionId:q.id,answer:ans,isFollowUp:true,missingDimension:S.missingDim});
       if(r.allAiFailed) return midFail(r.detail);
       const merged = S.firstEval.results.map(x=>
         x.dimension===S.missingDim?{...x,points:r.points,status:r.status}:x
       );
-      pushScore(q, merged, merged.reduce((s,x)=>s+x.points,0));
+      pushScore(q, merged, merged.reduce((s,x)=>s+x.points,0), false, combinedAns);
       setQ(r.tutorResponse, false);
       setTimeout(nextQ, 2000);
     }
@@ -557,6 +560,7 @@ function submitMCQ(){
   S.mcqDone=true;
   const fq=S.fallback[S.q], fb=fq.fallback;
   const ok=fb.options[S.mcqSel].correct;
+  const selectedText = fb.options[S.mcqSel].text;
   document.querySelectorAll(".mcq-opt").forEach((el,i)=>{
     el.classList.add("disabled");
     if(fb.options[i].correct) el.classList.add("correct");
@@ -569,7 +573,7 @@ function submitMCQ(){
   pushScore(
     {topic:fq.topic,maxScore:fq.maxScore,idealAnswer:fq.idealAnswer},
     [{dimension:"Critical dimension",status:ok?"COVERED":"MISSED",points:ok?fb.points:0}],
-    ok?fb.points:0, true
+    ok?fb.points:0, true, selectedText
   );
   const btn=document.getElementById("btnMcq");
   btn.textContent=S.q<S.fallback.length-1?"Next question":"See results";
@@ -661,8 +665,8 @@ function lockTA(){
   document.getElementById("answerInput").disabled=true;
   document.getElementById("btnSubmit").disabled=true;
 }
-function pushScore(q,dims,earned,isMCQ=false){
-  S.scores.push({topic:q.topic,earned,max:q.maxScore,idealAnswer:q.idealAnswer,dimensions:dims,isMCQ});
+function pushScore(q,dims,earned,isMCQ=false,userAnswer=""){
+  S.scores.push({topic:q.topic,earned,max:q.maxScore,idealAnswer:q.idealAnswer,dimensions:dims,isMCQ,userAnswer});
 }
 async function post(url,body){
   const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});

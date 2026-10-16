@@ -1,4 +1,5 @@
 const SHEET_NAME = "Knowledge Check";
+const ANSWERS_SHEET_NAME = "Learner Answers";
 
 const HEADERS = [
   "Timestamp",
@@ -46,7 +47,7 @@ function doPost(e) {
     const ts = new Date(data.timestamp);
     const formatted = Utilities.formatDate(ts, Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
 
-    // Append row — now includes duration and location
+    // Append row — scores
     sheet.appendRow([
       formatted,
       data.name,
@@ -76,6 +77,56 @@ function doPost(e) {
 
     // Auto-resize columns for readability
     sheet.autoResizeColumns(1, HEADERS.length);
+
+    // ─── Populating Next Tab: Learner Answers ──────────────────────────────
+    let answersSheet = ss.getSheetByName(ANSWERS_SHEET_NAME);
+    if (!answersSheet) {
+      answersSheet = ss.insertSheet(ANSWERS_SHEET_NAME);
+      answersSheet.appendRow(HEADERS);
+      answersSheet.getRange(1, 1, 1, HEADERS.length)
+        .setFontWeight("bold")
+        .setBackground("#0A0A0A")
+        .setFontColor("#F0EDE8");
+      answersSheet.setFrozenRows(1);
+    }
+
+    // Always sync headers on answers sheet as well
+    const prevAnsHeaderWidth = answersSheet.getLastColumn();
+    answersSheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    if (prevAnsHeaderWidth > HEADERS.length) {
+      answersSheet.getRange(1, HEADERS.length + 1, 1, prevAnsHeaderWidth - HEADERS.length).clearContent();
+    }
+
+    // Append row — raw user submitted answers
+    answersSheet.appendRow([
+      formatted,
+      data.name,
+      data.duration        || "Unknown",
+      data.totalScore,
+      data.maxScore,
+      data.passed ? "PASS" : "NOT PASS",
+      data.mode            || "ai",
+      data.city            || "Unknown",
+      data.region          || "Unknown",
+      data.country         || "Unknown",
+      data.q1_raw          || "",
+      data.q2_raw          || "",
+      data.q3_raw          || "",
+      data.q4_raw          || "",
+      data.q5_raw          || "",
+    ]);
+
+    // Colour-code the Pass/Fail cell (column 6) on answers sheet
+    const ansLastRow = answersSheet.getLastRow();
+    const ansPassCell = answersSheet.getRange(ansLastRow, 6);
+    if (data.passed) {
+      ansPassCell.setBackground("#DFF0E8").setFontColor("#1A5C35");
+    } else {
+      ansPassCell.setBackground("#F5E0E0").setFontColor("#7A1A1A");
+    }
+
+    // Auto-resize columns for readability
+    answersSheet.autoResizeColumns(1, HEADERS.length);
 
     return ContentService
       .createTextOutput(JSON.stringify({ success: true, row: lastRow }))
@@ -109,6 +160,11 @@ function testWrite() {
         q3: 20,
         q4: 20,
         q5: 0,
+        q1_raw: "KSTORE30, FLASH15, NEWUSER10",
+        q2_raw: "Standard is 5-7 days and express is 2-3 days",
+        q3_raw: "24 hours",
+        q4_raw: "Finance department",
+        q5_raw: "It is because of system delay",
       }),
     },
   };

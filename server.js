@@ -518,6 +518,11 @@ app.post("/api/submit-score", async (req, res) => {
       q3: breakdown[2]?.earned ?? 0,
       q4: breakdown[3]?.earned ?? 0,
       q5: breakdown[4]?.earned ?? 0,
+      q1_raw: breakdown[0]?.userAnswer ?? "",
+      q2_raw: breakdown[1]?.userAnswer ?? "",
+      q3_raw: breakdown[2]?.userAnswer ?? "",
+      q4_raw: breakdown[3]?.userAnswer ?? "",
+      q5_raw: breakdown[4]?.userAnswer ?? "",
     };
 
     console.log(`[Submit] ${name} | Score: ${totalScore}/${maxScore} | Duration: ${payload.duration} | Location: ${location.city}, ${location.country}`);
