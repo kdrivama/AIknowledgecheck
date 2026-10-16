@@ -3,9 +3,14 @@ const SHEET_NAME = "Knowledge Check";
 const HEADERS = [
   "Timestamp",
   "Participant Name",
+  "Duration",
   "Total Score",
   "Max Score",
   "Pass / Fail",
+  "Mode",
+  "City",
+  "Region",
+  "Country",
   "Q1 – Campaign Promo Codes (20)",
   "Q2 – Delivery SLAs (20)",
   "Q3 – BNPL Pending Escalation SLA (20)",
@@ -41,13 +46,18 @@ function doPost(e) {
     const ts = new Date(data.timestamp);
     const formatted = Utilities.formatDate(ts, Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
 
-    // Append row
+    // Append row — now includes duration and location
     sheet.appendRow([
       formatted,
       data.name,
+      data.duration        || "Unknown",
       data.totalScore,
       data.maxScore,
       data.passed ? "PASS" : "NOT PASS",
+      data.mode            || "ai",
+      data.city            || "Unknown",
+      data.region          || "Unknown",
+      data.country         || "Unknown",
       data.q1 ?? 0,
       data.q2 ?? 0,
       data.q3 ?? 0,
@@ -55,9 +65,9 @@ function doPost(e) {
       data.q5 ?? 0,
     ]);
 
-    // Colour-code the Pass/Fail cell
+    // Colour-code the Pass/Fail cell (column 6)
     const lastRow = sheet.getLastRow();
-    const passCell = sheet.getRange(lastRow, 5);
+    const passCell = sheet.getRange(lastRow, 6);
     if (data.passed) {
       passCell.setBackground("#DFF0E8").setFontColor("#1A5C35");
     } else {
@@ -88,6 +98,12 @@ function testWrite() {
         maxScore: 100,
         passed: true,
         timestamp: new Date().toISOString(),
+        duration: "4m 32s",
+        durationSeconds: 272,
+        mode: "ai",
+        city: "Kuala Lumpur",
+        region: "Federal Territory",
+        country: "Malaysia",
         q1: 20,
         q2: 20,
         q3: 20,

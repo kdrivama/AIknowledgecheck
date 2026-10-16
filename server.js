@@ -453,26 +453,75 @@ app.post("/api/tutor-message", (req, res) => {
   res.status(400).json({ error: "Unknown message type" });
 });
 
+// ─── Geolocation lookup via ip-api.com (free, no key required) ───────────────
+async function getLocation(ip) {
+  // Skip lookup for localhost/private IPs
+  if (!ip || ip === "::1" || ip.startsWith("127.") || ip.startsWith("192.168.") || ip.startsWith("10.")) {
+    return { country: "Local", city: "Local", region: "Local" };
+  }
+  try {
+    const res = await fetch(`http://ip-api.com/json/${ip}?fields=country,regionName,city,status`, {
+      signal: AbortSignal.timeout(3000), // 3 second timeout — never block score submission
+    });
+    const data = await res.json();
+    if (data.status === "success") {
+      return {
+        country: data.country   || "Unknown",
+        region:  data.regionName || "Unknown",
+        city:    data.city       || "Unknown",
+      };
+    }
+    return { country: "Unknown", city: "Unknown", region: "Unknown" };
+  } catch (e) {
+    console.warn("[Geo] Lookup failed:", e.message);
+    return { country: "Unknown", city: "Unknown", region: "Unknown" };
+  }
+}
+
+// ─── Format duration from seconds to human-readable ──────────────────────────
+function formatDuration(seconds) {
+  if (!seconds || isNaN(seconds)) return "Unknown";
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  if (m === 0) return `${s}s`;
+  return `${m}m ${s}s`;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // SUBMIT SCORE
 // ════════════════════════════════════════════════════════════════════════════
 app.post("/api/submit-score", async (req, res) => {
   if (!APPS_SCRIPT_URL) return res.status(500).json({ error: "APPS_SCRIPT_URL not configured" });
-  const { name, totalScore, maxScore, passed, breakdown, timestamp, mode } = req.body;
+  const { name, totalScore, maxScore, passed, breakdown, timestamp, mode, durationSeconds } = req.body;
   if (!Array.isArray(breakdown) || breakdown.length !== 5) {
     return res.status(400).json({ error: "breakdown must be an array of 5 scores" });
   }
   try {
+    // Get location from client IP — runs in parallel, never blocks submission
+    const ip = getClientIP(req);
+    const location = await getLocation(ip);
+
     const payload = {
-      name, totalScore, maxScore, passed,
-      timestamp: timestamp || new Date().toISOString(),
-      mode: mode || "ai",
+      name,
+      totalScore,
+      maxScore,
+      passed,
+      timestamp:       timestamp || new Date().toISOString(),
+      mode:            mode || "ai",
+      durationSeconds: durationSeconds || 0,
+      duration:        formatDuration(durationSeconds),
+      country:         location.country,
+      region:          location.region,
+      city:            location.city,
       q1: breakdown[0]?.earned ?? 0,
       q2: breakdown[1]?.earned ?? 0,
       q3: breakdown[2]?.earned ?? 0,
       q4: breakdown[3]?.earned ?? 0,
       q5: breakdown[4]?.earned ?? 0,
     };
+
+    console.log(`[Submit] ${name} | Score: ${totalScore}/${maxScore} | Duration: ${payload.duration} | Location: ${location.city}, ${location.country}`);
+
     const response = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
